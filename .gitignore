@@ -2,3 +2,4 @@ dist/
 *.zip
 *:Zone.Identifier
 *.md
+!README.md
