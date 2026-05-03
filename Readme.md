@@ -23,7 +23,7 @@ Instead of losing links in browser bookmarks, chats, or notes, you can store eve
 Soon to be found on the Chrome Web Store. 
 Till then,
 1. Clone the repo
-2. Set chrome to dev mode
-3. from the Chrome extensions: "Load Unpacked" and choose the directory of the repo.
+2. Set Chrome to dev mode
+3. From the Chrome extensions: "Load Unpacked" and choose the directory of the repo.
 
 
