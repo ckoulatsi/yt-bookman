@@ -1,3 +1,5 @@
+![YouTube Bookmark Manager](YTBM.png)
+
 # YouTube Bookmark Manager
 
 A simple bookmark manager extension for the Chrome Browser, for saving, organizing, and quickly revisiting your favorite YouTube videos.
