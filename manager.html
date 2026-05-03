@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Bookmark Manager</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="manager-page">
+<main class="app-shell">
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Saved bookmarks</p>
+      <h1>YouTube Bookmark Manager</h1>
+    </div>
+    <div class="bookmark-count" id="bookmarkCount">0 bookmarks</div>
+  </header>
+
+  <section class="toolbar" aria-label="Bookmark filters">
+    <label class="search-field">
+      <span>Search</span>
+      <input id="searchInput" type="search" placeholder="Search titles, categories, tags">
+    </label>
+
+    <label>
+      <span>Category</span>
+      <select id="categoryFilter"></select>
+    </label>
+
+    <label>
+      <span>Tag</span>
+      <select id="tagFilter"></select>
+    </label>
+
+    <button id="clearFilters" type="button" class="secondary-button">Clear</button>
+  </section>
+
+  <section class="facet-section" aria-label="Categories and tags">
+    <div>
+      <h2>Categories</h2>
+      <div id="categoryChips" class="chip-list"></div>
+    </div>
+    <div>
+      <h2>Tags</h2>
+      <div id="tagChips" class="chip-list"></div>
+    </div>
+  </section>
+
+  <section id="emptyState" class="empty-state" hidden>
+    <h2 id="emptyTitle">No bookmarks found</h2>
+    <p id="emptyCopy">Save videos or timestamped moments from YouTube, then use categories, tags, and notes to organize them here.</p>
+  </section>
+
+  <section id="list" class="bookmark-grid" aria-live="polite"></section>
+</main>
+
+<dialog id="editModal" class="modal">
+  <form id="editForm" method="dialog" class="modal-card">
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">Edit bookmark</p>
+        <h2 id="modalTitle">Bookmark details</h2>
+      </div>
+      <button id="closeModal" type="button" class="icon-button" aria-label="Close edit modal">x</button>
+    </div>
+
+    <input id="bookmarkId" type="hidden">
+
+    <label>
+      <span>Title</span>
+      <input id="titleInput" type="text" required>
+    </label>
+
+    <label>
+      <span>Category</span>
+      <select id="categorySelect" required></select>
+    </label>
+
+    <label id="newCategoryField" hidden>
+      <span>New category</span>
+      <input id="newCategoryInput" type="text" placeholder="Category name">
+    </label>
+
+    <label>
+      <span>Notes</span>
+      <textarea id="notesInput" rows="4" placeholder="Notes about this bookmark"></textarea>
+    </label>
+
+    <label>
+      <span>Tags</span>
+      <input id="tagsInput" type="text" placeholder="research, music, watch later">
+    </label>
+
+    <p class="field-help">Separate tags with commas.</p>
+
+    <div class="modal-actions">
+      <button id="deleteBookmark" type="button" class="danger-button">Delete</button>
+      <div>
+        <button id="cancelEdit" type="button" class="secondary-button">Cancel</button>
+        <button type="submit" class="primary-button">Save changes</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<script src="manager.js"></script>
+</body>
+</html>

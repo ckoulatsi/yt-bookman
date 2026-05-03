@@ -1,0 +1,4 @@
+dist/
+*.zip
+*:Zone.Identifier
+*.md
