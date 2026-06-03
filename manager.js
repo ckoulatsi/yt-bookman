@@ -6,11 +6,17 @@ const state = {
   bookmarks: [],
   search: '',
   category: 'all',
-  tag: 'all'
+  tag: 'all',
+  importExportMessage: '',
+  importExportTone: ''
 };
 
 const els = {
   bookmarkCount: document.getElementById('bookmarkCount'),
+  importExportMessage: document.getElementById('importExportMessage'),
+  importButton: document.getElementById('importButton'),
+  exportButton: document.getElementById('exportButton'),
+  importFileInput: document.getElementById('importFileInput'),
   searchInput: document.getElementById('searchInput'),
   categoryFilter: document.getElementById('categoryFilter'),
   tagFilter: document.getElementById('tagFilter'),
@@ -172,12 +178,21 @@ async function saveBookmarks(bookmarks = state.bookmarks) {
   render();
 }
 
+function setImportExportMessage(message, tone = '') {
+  state.importExportMessage = message;
+  state.importExportTone = tone;
+  els.importExportMessage.textContent = message;
+  els.importExportMessage.dataset.tone = tone;
+}
+
 function render() {
   const categories = getCounts((bookmark) => bookmark.category);
   const tags = getTagCounts();
   syncActiveFilters(categories, tags);
   const filtered = getFilteredBookmarks();
 
+  els.importExportMessage.textContent = state.importExportMessage;
+  els.importExportMessage.dataset.tone = state.importExportTone;
   renderCount(filtered.length);
   renderSelect(els.categoryFilter, categories, state.category, 'All categories');
   renderSelect(els.tagFilter, tags, state.tag, 'All tags');
@@ -476,6 +491,98 @@ function formatDate(value) {
   }).format(date);
 }
 
+function createExportPayload() {
+  return {
+    app: 'yt-bookmark-manager',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    bookmarks: state.bookmarks
+  };
+}
+
+function downloadTextFile(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
+function getImportBookmarks(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (payload && Array.isArray(payload.bookmarks)) return payload.bookmarks;
+  throw new Error('The file must contain a bookmark array or a bookmarks field.');
+}
+
+function mergeBookmarks(existing, imported) {
+  const merged = new Map();
+
+  existing.forEach((bookmark) => {
+    merged.set(bookmark.id, bookmark);
+  });
+
+  imported.forEach((bookmark) => {
+    merged.set(bookmark.id, bookmark);
+  });
+
+  return [...merged.values()].sort((a, b) => {
+    const left = new Date(a.addedAt || 0).getTime();
+    const right = new Date(b.addedAt || 0).getTime();
+    return right - left;
+  });
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Could not read the selected file.'));
+    reader.readAsText(file);
+  });
+}
+
+function buildExportFilename() {
+  const date = new Date().toISOString().slice(0, 10);
+  return `yt-bookmarks-${date}.json`;
+}
+
+function handleExport() {
+  const payload = createExportPayload();
+  downloadTextFile(
+    buildExportFilename(),
+    JSON.stringify(payload, null, 2),
+    'application/json'
+  );
+
+  setImportExportMessage(`Exported ${state.bookmarks.length} bookmark${state.bookmarks.length === 1 ? '' : 's'}.`, 'success');
+}
+
+async function handleImportFile(event) {
+  const file = event.target.files?.[0];
+  els.importFileInput.value = '';
+
+  if (!file) return;
+
+  try {
+    const content = await readFileAsText(file);
+    const payload = JSON.parse(content);
+    const importedBookmarks = normalizeBookmarks(getImportBookmarks(payload));
+    const beforeCount = state.bookmarks.length;
+    const mergedBookmarks = mergeBookmarks(state.bookmarks, importedBookmarks);
+    const addedCount = Math.max(mergedBookmarks.length - beforeCount, 0);
+
+    await saveBookmarks(mergedBookmarks);
+    setImportExportMessage(
+      `Imported ${importedBookmarks.length} bookmark${importedBookmarks.length === 1 ? '' : 's'}${addedCount !== importedBookmarks.length ? `, added ${addedCount} new` : ''}.`,
+      'success'
+    );
+  } catch (error) {
+    setImportExportMessage(error instanceof Error ? error.message : 'Import failed.', 'error');
+  }
+}
+
 function openEditModal(id) {
   const bookmark = state.bookmarks.find((item) => item.id === id);
   if (!bookmark) return;
@@ -575,6 +682,13 @@ function getSelectedEditCategory() {
 }
 
 function bindEvents() {
+  els.importButton.addEventListener('click', () => {
+    els.importFileInput.click();
+  });
+
+  els.exportButton.addEventListener('click', handleExport);
+  els.importFileInput.addEventListener('change', handleImportFile);
+
   els.searchInput.addEventListener('input', (event) => {
     state.search = event.target.value.trim();
     render();

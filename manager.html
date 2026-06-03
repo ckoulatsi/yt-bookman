@@ -13,8 +13,15 @@
       <p class="eyebrow">Saved bookmarks</p>
       <h1>YouTube Bookmark Manager</h1>
     </div>
-    <div class="bookmark-count" id="bookmarkCount">0 bookmarks</div>
+    <div class="header-actions">
+      <p id="importExportMessage" class="status-message" aria-live="polite"></p>
+      <button id="importButton" type="button" class="secondary-button">Import</button>
+      <button id="exportButton" type="button" class="secondary-button">Export</button>
+      <div class="bookmark-count" id="bookmarkCount">0 bookmarks</div>
+    </div>
   </header>
+
+  <input id="importFileInput" type="file" accept="application/json,.json" hidden>
 
   <section class="toolbar" aria-label="Bookmark filters">
     <label class="search-field">
