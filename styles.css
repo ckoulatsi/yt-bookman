@@ -681,6 +681,20 @@
   line-height: 1.2;
 }
 
+.manager-page .field-help a {
+  color: #67e8f9;
+}
+
+.manager-page #syncConnectedSection {
+  display: grid;
+  gap: 16px;
+}
+
+.manager-page button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 @media (max-width: 820px) {
   .manager-page .app-header,
   .manager-page .card-actions,

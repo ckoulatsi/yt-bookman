@@ -17,6 +17,7 @@
       <p id="importExportMessage" class="status-message" aria-live="polite"></p>
       <button id="importButton" type="button" class="secondary-button">Import</button>
       <button id="exportButton" type="button" class="secondary-button">Export</button>
+      <button id="syncButton" type="button" class="secondary-button">Sync</button>
       <button id="deleteAllButton" type="button" class="danger-button">Delete all</button>
       <div class="bookmark-count" id="bookmarkCount">0 bookmarks</div>
     </div>
@@ -109,6 +110,50 @@
       </div>
     </div>
   </form>
+</dialog>
+
+<dialog id="syncModal" class="modal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">GitHub gist sync</p>
+        <h2>Sync bookmarks across devices</h2>
+      </div>
+      <button id="closeSyncModal" type="button" class="icon-button" aria-label="Close sync dialog">x</button>
+    </div>
+
+    <p class="field-help">
+      Bookmarks are stored in a secret GitHub gist on your account. Connect each
+      device with a <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=YouTube%20Bookmark%20Manager" target="_blank" rel="noreferrer">personal access token</a>
+      that has the <strong>gist</strong> scope, then push or pull to merge.
+    </p>
+
+    <div id="syncConnectSection">
+      <label>
+        <span>Personal access token</span>
+        <input id="syncTokenInput" type="password" placeholder="ghp_..." autocomplete="off">
+      </label>
+      <div class="modal-actions">
+        <span></span>
+        <div>
+          <button id="syncConnectButton" type="button" class="primary-button">Connect</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="syncConnectedSection" hidden>
+      <p id="syncStatus" class="status-message"></p>
+      <div class="modal-actions">
+        <button id="syncDisconnectButton" type="button" class="danger-button">Disconnect</button>
+        <div>
+          <button id="syncPullButton" type="button" class="secondary-button">Pull from gist</button>
+          <button id="syncPushButton" type="button" class="primary-button">Push to gist</button>
+        </div>
+      </div>
+    </div>
+
+    <p id="syncMessage" class="status-message" aria-live="polite"></p>
+  </div>
 </dialog>
 
 <script src="manager.js"></script>

@@ -2,6 +2,11 @@ const STORAGE_KEY = 'yt_video_bookmarks';
 const PROFILE_KEY = 'yt_profile';
 const SYNC_META_KEY = 'yt_sync_meta';
 const SYNC_CHUNK_PREFIX = 'yt_sync_chunk_';
+const GIST_TOKEN_KEY = 'yt_gist_token';
+const GIST_ID_KEY = 'yt_gist_id';
+const GIST_USER_KEY = 'yt_gist_user';
+const GIST_FILENAME = 'yt-bookmarks.json';
+const GIST_DESCRIPTION = 'YouTube Bookmark Manager sync data';
 const UNCATEGORIZED = 'Uncategorized';
 const NEW_CATEGORY = '__ytbm_new_category__';
 
@@ -20,6 +25,18 @@ const els = {
   importExportMessage: document.getElementById('importExportMessage'),
   importButton: document.getElementById('importButton'),
   exportButton: document.getElementById('exportButton'),
+  syncButton: document.getElementById('syncButton'),
+  syncModal: document.getElementById('syncModal'),
+  closeSyncModal: document.getElementById('closeSyncModal'),
+  syncConnectSection: document.getElementById('syncConnectSection'),
+  syncConnectedSection: document.getElementById('syncConnectedSection'),
+  syncTokenInput: document.getElementById('syncTokenInput'),
+  syncConnectButton: document.getElementById('syncConnectButton'),
+  syncStatus: document.getElementById('syncStatus'),
+  syncDisconnectButton: document.getElementById('syncDisconnectButton'),
+  syncPullButton: document.getElementById('syncPullButton'),
+  syncPushButton: document.getElementById('syncPushButton'),
+  syncMessage: document.getElementById('syncMessage'),
   deleteAllButton: document.getElementById('deleteAllButton'),
   importFileInput: document.getElementById('importFileInput'),
   searchInput: document.getElementById('searchInput'),
@@ -709,6 +726,223 @@ function handleDeleteAll() {
   deleteAllArmTimeoutId = window.setTimeout(resetDeleteAllButton, 4000);
 }
 
+function setSyncMessage(message, tone = '') {
+  els.syncMessage.textContent = message;
+  els.syncMessage.dataset.tone = tone;
+}
+
+function setSyncBusy(busy) {
+  [els.syncConnectButton, els.syncPullButton, els.syncPushButton, els.syncDisconnectButton].forEach((button) => {
+    button.disabled = busy;
+  });
+}
+
+async function getGistSettings() {
+  const data = await chrome.storage.local.get([GIST_TOKEN_KEY, GIST_ID_KEY, GIST_USER_KEY]);
+  return {
+    token: data[GIST_TOKEN_KEY] || '',
+    gistId: data[GIST_ID_KEY] || '',
+    user: data[GIST_USER_KEY] || ''
+  };
+}
+
+async function saveGistSettings(settings) {
+  await chrome.storage.local.set({
+    [GIST_TOKEN_KEY]: settings.token || '',
+    [GIST_ID_KEY]: settings.gistId || '',
+    [GIST_USER_KEY]: settings.user || ''
+  });
+}
+
+async function githubApi(path, token, options = {}) {
+  const response = await fetch(`https://api.github.com${path}`, {
+    ...options,
+    headers: {
+      Accept: 'application/vnd.github+json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.body ? { 'Content-Type': 'application/json' } : {})
+    }
+  });
+
+  if (!response.ok) {
+    const messages = {
+      401: 'GitHub rejected the token. Reconnect with a valid gist-scoped token.',
+      403: 'GitHub refused the request (rate limit or missing scope).',
+      404: 'Gist not found. It may have been deleted.',
+      422: 'GitHub rejected the payload.'
+    };
+    throw new Error(messages[response.status] || `GitHub request failed (${response.status}).`);
+  }
+
+  return response.status === 204 ? null : response.json();
+}
+
+function findSyncGist(gists) {
+  return (Array.isArray(gists) ? gists : []).find((gist) => (
+    gist.description === GIST_DESCRIPTION && gist.files && gist.files[GIST_FILENAME]
+  )) || null;
+}
+
+function syncPayload() {
+  return {
+    ...createExportPayload(),
+    app: 'yt-bookmark-manager-sync',
+    bookmarks: state.bookmarks
+  };
+}
+
+async function renderSyncStatus() {
+  const settings = await getGistSettings();
+  const connected = Boolean(settings.token && settings.user);
+
+  els.syncConnectSection.hidden = connected;
+  els.syncConnectedSection.hidden = !connected;
+
+  if (connected) {
+    els.syncStatus.textContent = settings.gistId
+      ? `Connected as ${settings.user}. Gist ${settings.gistId.slice(0, 8)}.`
+      : `Connected as ${settings.user}. No sync gist yet — push to create one.`;
+    els.syncStatus.dataset.tone = '';
+  }
+}
+
+function openSyncModal() {
+  setSyncMessage('', '');
+  els.syncTokenInput.value = '';
+
+  renderSyncStatus().catch((error) => {
+    console.error('YouTube Bookmark Manager: failed to load sync state', error);
+  });
+
+  if (typeof els.syncModal.showModal === 'function') {
+    els.syncModal.showModal();
+  } else {
+    els.syncModal.setAttribute('open', '');
+  }
+}
+
+function closeSyncModalDialog() {
+  if (typeof els.syncModal.close === 'function') {
+    els.syncModal.close();
+  } else {
+    els.syncModal.removeAttribute('open');
+  }
+}
+
+async function handleSyncConnect() {
+  const token = els.syncTokenInput.value.trim();
+  if (!token) {
+    setSyncMessage('Paste a GitHub personal access token first.', 'error');
+    return;
+  }
+
+  setSyncBusy(true);
+  setSyncMessage('Connecting to GitHub...', '');
+
+  try {
+    const user = await githubApi('/user', token);
+    const gists = await githubApi('/gists?per_page=100', token);
+    const existing = findSyncGist(gists);
+
+    await saveGistSettings({
+      token,
+      gistId: existing?.id || '',
+      user: user.login || ''
+    });
+
+    els.syncTokenInput.value = '';
+    await renderSyncStatus();
+    setSyncMessage(existing
+      ? `Connected as ${user.login}. Found your existing sync gist.`
+      : `Connected as ${user.login}.`, 'success');
+  } catch (error) {
+    setSyncMessage(error instanceof Error ? error.message : 'Could not connect.', 'error');
+  } finally {
+    setSyncBusy(false);
+  }
+}
+
+async function handleSyncPush() {
+  const settings = await getGistSettings();
+  if (!settings.token) return;
+
+  setSyncBusy(true);
+  setSyncMessage('Pushing to gist...', '');
+
+  try {
+    const body = JSON.stringify({
+      description: GIST_DESCRIPTION,
+      public: false,
+      files: {
+        [GIST_FILENAME]: {
+          content: JSON.stringify(syncPayload(), null, 2)
+        }
+      }
+    });
+
+    let gist;
+    if (settings.gistId) {
+      gist = await githubApi(`/gists/${settings.gistId}`, settings.token, { method: 'PATCH', body });
+    } else {
+      gist = await githubApi('/gists', settings.token, { method: 'POST', body });
+    }
+
+    if (gist?.id && gist.id !== settings.gistId) {
+      await saveGistSettings({ ...settings, gistId: gist.id });
+    }
+
+    await renderSyncStatus();
+    setSyncMessage(`Pushed ${state.bookmarks.length} bookmark${state.bookmarks.length === 1 ? '' : 's'} to your secret gist.`, 'success');
+  } catch (error) {
+    setSyncMessage(error instanceof Error ? error.message : 'Push failed.', 'error');
+  } finally {
+    setSyncBusy(false);
+  }
+}
+
+async function handleSyncPull() {
+  const settings = await getGistSettings();
+  if (!settings.token) return;
+
+  if (!settings.gistId) {
+    setSyncMessage('No sync gist yet on this device. Push first to create it.', 'error');
+    return;
+  }
+
+  setSyncBusy(true);
+  setSyncMessage('Pulling from gist...', '');
+
+  try {
+    const gist = await githubApi(`/gists/${settings.gistId}`, settings.token);
+    const file = gist.files?.[GIST_FILENAME];
+    if (!file) {
+      throw new Error('The sync gist does not contain the bookmark file.');
+    }
+
+    const payload = JSON.parse(file.content);
+    const importedBookmarks = normalizeBookmarks(getImportBookmarks(payload));
+    const beforeCount = state.bookmarks.length;
+    const mergedBookmarks = mergeBookmarks(state.bookmarks, importedBookmarks);
+    const addedCount = Math.max(mergedBookmarks.length - beforeCount, 0);
+
+    await saveBookmarks(mergedBookmarks);
+    setSyncMessage(
+      `Pulled ${importedBookmarks.length} bookmark${importedBookmarks.length === 1 ? '' : 's'}${addedCount ? `, ${addedCount} new` : ', no new entries'}.`,
+      'success'
+    );
+  } catch (error) {
+    setSyncMessage(error instanceof Error ? error.message : 'Pull failed.', 'error');
+  } finally {
+    setSyncBusy(false);
+  }
+}
+
+async function handleSyncDisconnect() {
+  await saveGistSettings({ token: '', gistId: '', user: '' });
+  await renderSyncStatus();
+  setSyncMessage('Disconnected. The gist itself still exists on GitHub.', 'success');
+}
+
 function openEditModal(id) {
   const bookmark = state.bookmarks.find((item) => item.id === id);
   if (!bookmark) return;
@@ -815,6 +1049,32 @@ function bindEvents() {
   els.exportButton.addEventListener('click', handleExport);
   els.deleteAllButton.addEventListener('click', handleDeleteAll);
   els.importFileInput.addEventListener('change', handleImportFile);
+
+  els.syncButton.addEventListener('click', openSyncModal);
+  els.closeSyncModal.addEventListener('click', closeSyncModalDialog);
+  els.syncConnectButton.addEventListener('click', () => {
+    handleSyncConnect().catch((error) => {
+      console.error('YouTube Bookmark Manager: sync connect failed', error);
+    });
+  });
+  els.syncPushButton.addEventListener('click', () => {
+    handleSyncPush().catch((error) => {
+      console.error('YouTube Bookmark Manager: sync push failed', error);
+    });
+  });
+  els.syncPullButton.addEventListener('click', () => {
+    handleSyncPull().catch((error) => {
+      console.error('YouTube Bookmark Manager: sync pull failed', error);
+    });
+  });
+  els.syncDisconnectButton.addEventListener('click', () => {
+    handleSyncDisconnect().catch((error) => {
+      console.error('YouTube Bookmark Manager: sync disconnect failed', error);
+    });
+  });
+  els.syncModal.addEventListener('click', (event) => {
+    if (event.target === els.syncModal) closeSyncModalDialog();
+  });
 
   els.searchInput.addEventListener('input', (event) => {
     state.search = event.target.value.trim();
