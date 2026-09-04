@@ -1,9 +1,13 @@
 const STORAGE_KEY = 'yt_video_bookmarks';
+const PROFILE_KEY = 'yt_profile';
+const SYNC_META_KEY = 'yt_sync_meta';
+const SYNC_CHUNK_PREFIX = 'yt_sync_chunk_';
 const UNCATEGORIZED = 'Uncategorized';
 const NEW_CATEGORY = '__ytbm_new_category__';
 
 const state = {
   bookmarks: [],
+  profile: null,
   search: '',
   category: 'all',
   tag: 'all',
@@ -16,6 +20,7 @@ const els = {
   importExportMessage: document.getElementById('importExportMessage'),
   importButton: document.getElementById('importButton'),
   exportButton: document.getElementById('exportButton'),
+  deleteAllButton: document.getElementById('deleteAllButton'),
   importFileInput: document.getElementById('importFileInput'),
   searchInput: document.getElementById('searchInput'),
   categoryFilter: document.getElementById('categoryFilter'),
@@ -42,9 +47,53 @@ const els = {
   deleteBookmark: document.getElementById('deleteBookmark')
 };
 
+async function loadProfile() {
+  const data = await chrome.storage.local.get(PROFILE_KEY);
+  const stored = data[PROFILE_KEY] || {};
+
+  state.profile = {
+    id: stored.id || crypto.randomUUID(),
+    name: String(stored.name || '').trim() || 'Default profile',
+    createdAt: stored.createdAt || new Date().toISOString()
+  };
+
+  if (!stored.id || !stored.name || !stored.createdAt) {
+    await chrome.storage.local.set({ [PROFILE_KEY]: state.profile });
+  }
+}
+
+async function readSyncBackup() {
+  const meta = (await chrome.storage.sync.get(SYNC_META_KEY))[SYNC_META_KEY];
+  const chunkCount = Number(meta?.chunks || 0);
+  if (!chunkCount) return [];
+
+  const keys = Array.from({ length: chunkCount }, (_, index) => `${SYNC_CHUNK_PREFIX}${index}`);
+  const chunks = await chrome.storage.sync.get(keys);
+
+  try {
+    const serialized = keys.map((key) => chunks[key]).join('');
+    const bookmarks = JSON.parse(serialized);
+    return Array.isArray(bookmarks) ? bookmarks : [];
+  } catch (error) {
+    console.warn('YouTube Bookmark Manager: sync backup is unreadable', error);
+    return [];
+  }
+}
+
 async function load() {
   const data = await chrome.storage.local.get(STORAGE_KEY);
   state.bookmarks = normalizeBookmarks(data[STORAGE_KEY] || []);
+
+  if (!state.bookmarks.length) {
+    const backup = normalizeBookmarks(await readSyncBackup());
+    if (backup.length) {
+      state.bookmarks = backup;
+      await chrome.storage.local.set({ [STORAGE_KEY]: backup });
+      setImportExportMessage(`Restored ${backup.length} bookmark${backup.length === 1 ? '' : 's'} from backup.`, 'success');
+    }
+  }
+
+  await loadProfile();
   render();
 }
 
@@ -496,6 +545,7 @@ function createExportPayload() {
     app: 'yt-bookmark-manager',
     version: 1,
     exportedAt: new Date().toISOString(),
+    profile: state.profile,
     bookmarks: state.bookmarks
   };
 }
@@ -516,15 +566,51 @@ function getImportBookmarks(payload) {
   throw new Error('The file must contain a bookmark array or a bookmarks field.');
 }
 
+function getBookmarkIdentityKey(bookmark) {
+  if (bookmark.videoId) {
+    return `${bookmark.videoId}|${bookmark.hasTimestamp ? bookmark.timestampSeconds : 'video'}`;
+  }
+
+  return `id:${bookmark.id}`;
+}
+
+function getBookmarkTime(bookmark, field) {
+  const time = new Date(bookmark[field] || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function mergeBookmarkPair(current, incoming) {
+  const currentUpdated = Math.max(getBookmarkTime(current, 'updatedAt'), getBookmarkTime(current, 'addedAt'));
+  const incomingUpdated = Math.max(getBookmarkTime(incoming, 'updatedAt'), getBookmarkTime(incoming, 'addedAt'));
+  const newer = incomingUpdated > currentUpdated ? incoming : current;
+  const older = newer === incoming ? current : incoming;
+
+  let addedAt = current.addedAt;
+  if (!addedAt || (incoming.addedAt && getBookmarkTime(incoming, 'addedAt') < getBookmarkTime(current, 'addedAt'))) {
+    addedAt = incoming.addedAt;
+  }
+
+  return {
+    ...newer,
+    id: current.id,
+    tags: normalizeTags([...current.tags, ...incoming.tags]),
+    notes: newer.notes || older.notes,
+    addedAt,
+    updatedAt: newer.updatedAt || older.updatedAt || ''
+  };
+}
+
 function mergeBookmarks(existing, imported) {
   const merged = new Map();
 
   existing.forEach((bookmark) => {
-    merged.set(bookmark.id, bookmark);
+    merged.set(getBookmarkIdentityKey(bookmark), bookmark);
   });
 
   imported.forEach((bookmark) => {
-    merged.set(bookmark.id, bookmark);
+    const key = getBookmarkIdentityKey(bookmark);
+    const current = merged.get(key);
+    merged.set(key, current ? mergeBookmarkPair(current, bookmark) : bookmark);
   });
 
   return [...merged.values()].sort((a, b) => {
@@ -572,15 +658,55 @@ async function handleImportFile(event) {
     const beforeCount = state.bookmarks.length;
     const mergedBookmarks = mergeBookmarks(state.bookmarks, importedBookmarks);
     const addedCount = Math.max(mergedBookmarks.length - beforeCount, 0);
+    const sourceProfile = payload && payload.profile;
+    const foreignProfile = sourceProfile && sourceProfile.id !== state.profile.id ? sourceProfile : null;
 
     await saveBookmarks(mergedBookmarks);
     setImportExportMessage(
-      `Imported ${importedBookmarks.length} bookmark${importedBookmarks.length === 1 ? '' : 's'}${addedCount !== importedBookmarks.length ? `, added ${addedCount} new` : ''}.`,
+      `Imported ${importedBookmarks.length} bookmark${importedBookmarks.length === 1 ? '' : 's'}`
+      + `${addedCount !== importedBookmarks.length ? `, added ${addedCount} new` : ''}`
+      + `${foreignProfile?.name ? ` from ${foreignProfile.name}` : ''}.`,
       'success'
     );
   } catch (error) {
     setImportExportMessage(error instanceof Error ? error.message : 'Import failed.', 'error');
   }
+}
+
+let deleteAllArmTimeoutId = null;
+
+function resetDeleteAllButton() {
+  els.deleteAllButton.textContent = 'Delete all';
+  els.deleteAllButton.dataset.armed = 'false';
+}
+
+async function deleteAllBookmarks() {
+  const count = state.bookmarks.length;
+  await saveBookmarks([]);
+  resetDeleteAllButton();
+  setImportExportMessage(`Deleted ${count} bookmark${count === 1 ? '' : 's'}. Import a file to bring them back.`, 'success');
+}
+
+function handleDeleteAll() {
+  if (!state.bookmarks.length) {
+    setImportExportMessage('Nothing to delete.', '');
+    return;
+  }
+
+  if (els.deleteAllButton.dataset.armed === 'true') {
+    window.clearTimeout(deleteAllArmTimeoutId);
+    deleteAllBookmarks().catch((error) => {
+      console.error('YouTube Bookmark Manager: failed to delete bookmarks', error);
+      setImportExportMessage('Could not delete bookmarks.', 'error');
+    });
+    return;
+  }
+
+  els.deleteAllButton.dataset.armed = 'true';
+  els.deleteAllButton.textContent = 'Click again to confirm';
+  setImportExportMessage(`Export first if you want a copy. About to delete ${state.bookmarks.length} bookmark${state.bookmarks.length === 1 ? '' : 's'}.`, 'error');
+
+  deleteAllArmTimeoutId = window.setTimeout(resetDeleteAllButton, 4000);
 }
 
 function openEditModal(id) {
@@ -687,6 +813,7 @@ function bindEvents() {
   });
 
   els.exportButton.addEventListener('click', handleExport);
+  els.deleteAllButton.addEventListener('click', handleDeleteAll);
   els.importFileInput.addEventListener('change', handleImportFile);
 
   els.searchInput.addEventListener('input', (event) => {

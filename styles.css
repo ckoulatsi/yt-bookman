@@ -622,6 +622,12 @@
   color: #fecdd3;
 }
 
+.manager-page #deleteAllButton[data-armed="true"] {
+  background: #7f1d1d;
+  border-color: #fda4af;
+  color: #fff1f2;
+}
+
 .manager-page .icon-button {
   background: transparent;
   border: 1px solid #343b49;
