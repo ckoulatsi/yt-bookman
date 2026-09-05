@@ -230,6 +230,7 @@ async function getBookmarks() {
 
 async function setBookmarks(bookmarks) {
   await chrome.storage.local.set({ [STORAGE_KEY]: normalizeBookmarks(bookmarks) });
+  chrome.runtime.sendMessage({ type: 'ytbm-mirror' }).catch(() => {});
   return true;
 }
 

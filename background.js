@@ -77,3 +77,15 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     console.warn('YouTube Bookmark Manager: sync backup failed', error);
   });
 });
+
+// Explicit mirror request from content/manager pages: sendMessage reliably
+// wakes this worker, so the backup does not depend on onChanged waking it.
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type !== 'ytbm-mirror') return;
+
+  chrome.storage.local.get(STORAGE_KEY).then((data) => (
+    mirrorBookmarksToSync(data[STORAGE_KEY] || [])
+  )).catch((error) => {
+    console.warn('YouTube Bookmark Manager: sync backup failed', error);
+  });
+});

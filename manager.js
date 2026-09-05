@@ -241,6 +241,7 @@ function formatTimestamp(seconds) {
 async function saveBookmarks(bookmarks = state.bookmarks) {
   state.bookmarks = normalizeBookmarks(bookmarks);
   await chrome.storage.local.set({ [STORAGE_KEY]: state.bookmarks });
+  chrome.runtime.sendMessage({ type: 'ytbm-mirror' }).catch(() => {});
   render();
 }
 
