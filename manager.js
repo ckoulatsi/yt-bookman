@@ -112,6 +112,20 @@ async function load() {
 
   await loadProfile();
   render();
+
+  // Reinstall with an empty library but a connected gist: pull automatically.
+  if (!state.bookmarks.length) {
+    const settings = await getGistSettings();
+    if (settings.token && settings.gistId) {
+      await handleSyncPull().then(() => {
+        if (state.bookmarks.length) {
+          setImportExportMessage(`Restored ${state.bookmarks.length} bookmark${state.bookmarks.length === 1 ? '' : 's'} from your GitHub gist.`, 'success');
+        }
+      }).catch((error) => {
+        console.warn('YouTube Bookmark Manager: auto pull from gist failed', error);
+      });
+    }
+  }
 }
 
 function normalizeBookmarks(bookmarks) {
@@ -853,6 +867,15 @@ async function handleSyncConnect() {
 
     els.syncTokenInput.value = '';
     await renderSyncStatus();
+
+    // Fresh install with an existing gist and an empty local library: restore now.
+    if (existing && !state.bookmarks.length) {
+      await handleSyncPull();
+      closeSyncModalDialog();
+      setImportExportMessage(`Restored ${state.bookmarks.length} bookmark${state.bookmarks.length === 1 ? '' : 's'} from your GitHub gist.`, 'success');
+      return;
+    }
+
     setSyncMessage(existing
       ? `Connected as ${user.login}. Found your existing sync gist.`
       : `Connected as ${user.login}.`, 'success');
