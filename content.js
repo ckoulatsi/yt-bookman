@@ -265,6 +265,7 @@ async function openSaveModal() {
   const root = ensureModal();
 
   root.dataset.videoId = draft.videoId;
+  root.dataset.mode = existing ? 'update' : 'save';
   root.querySelector('#ytbm-video-title').textContent = draft.title;
   root.querySelector('#ytbm-save-timestamp-checkbox').checked = false;
   root.querySelector('#ytbm-timestamp-input').value = formatTimestamp(draft.timestampSeconds);
@@ -660,10 +661,16 @@ async function updateSaveButtonState() {
 
   if (getVideoId() !== videoId) return;
 
+  const bookmarks = await getBookmarks();
+  if (getVideoId() !== videoId) return;
+
+  const existing = bookmarks.some((bookmark) => bookmark.videoId === videoId && !bookmark.hasTimestamp);
+
   button.dataset.videoId = videoId;
   button.dataset.saved = 'false';
-  button.textContent = '★ Save';
-  button.title = 'Save this YouTube video';
+  button.dataset.mode = existing ? 'update' : 'save';
+  button.textContent = existing ? '★ Update' : '★ Save';
+  button.title = existing ? 'Update this YouTube bookmark' : 'Save this YouTube video';
 }
 
 function injectButton() {
@@ -701,3 +708,11 @@ function injectButton() {
 }
 
 setInterval(injectButton, 1000);
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local' || !changes[STORAGE_KEY]) return;
+
+  updateSaveButtonState().catch((error) => {
+    console.error('YouTube Bookmark Manager: failed to refresh save button', error);
+  });
+});

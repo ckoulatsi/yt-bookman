@@ -18,6 +18,14 @@
   background: #be123c;
 }
 
+#ytbm-btn[data-mode="update"] {
+  background: #f97316;
+}
+
+#ytbm-btn[data-mode="update"]:hover {
+  background: #ea580c;
+}
+
 #ytbm-btn[data-saved="true"] {
   background: #0f766e;
 }
@@ -62,6 +70,10 @@
   width: min(460px, 100%);
 }
 
+#ytbm-modal-root[data-mode="update"] .ytbm-dialog {
+  background: #294744;
+}
+
 #ytbm-modal-root #ytbm-form {
   display: grid;
   gap: 14px;
@@ -78,7 +90,7 @@
 
 #ytbm-modal-root .ytbm-eyebrow {
   color: #9ba3af;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0;
   margin: 0 0 4px;
@@ -95,7 +107,7 @@
 
 #ytbm-modal-root #ytbm-video-title {
   color: #d7dce3;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.35;
   margin: 0;
 }
@@ -110,7 +122,7 @@
   color: #d7dce3;
   cursor: pointer;
   display: inline-flex;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
   gap: 10px;
   justify-self: start;
@@ -118,7 +130,7 @@
 
 #ytbm-modal-root .ytbm-field > span {
   color: #aeb5c0;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -129,7 +141,8 @@
   border: 1px solid #343b49;
   border-radius: 8px;
   color: #fff;
-  font: inherit;
+  font-family: inherit;
+  font-size: 16px;
   min-height: 42px;
   outline: none;
   padding: 0 12px;
@@ -170,7 +183,7 @@
   border-radius: 999px;
   color: #e9d5ff;
   cursor: pointer;
-  font: 600 12px/1.2 Arial, sans-serif;
+  font: 600 14px/1.2 Arial, sans-serif;
   max-width: 100%;
   overflow-wrap: anywhere;
   padding: 6px 9px;
@@ -185,7 +198,7 @@
 #ytbm-modal-root .ytbm-help,
 #ytbm-modal-root #ytbm-message {
   color: #9ba3af;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.35;
   margin: 0;
 }
@@ -196,7 +209,7 @@
   appearance: none;
   border-radius: 8px;
   cursor: pointer;
-  font: 700 14px/1.2 Arial, sans-serif;
+  font: 700 16px/1.2 Arial, sans-serif;
   min-height: 40px;
 }
 
@@ -221,7 +234,7 @@
   background: transparent;
   border: 1px solid #343b49;
   color: #d7dce3;
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
   width: 40px;
 }
