@@ -10,6 +10,7 @@ A simple bookmark manager extension for the Chrome Browser, for saving, organizi
 - Organize bookmarks by category or tags
 - Save a Video on a Specific timestamp with a note
 - Search saved videos
+- Rename or delete a tag across every bookmark that uses it
 - Open saved videos directly on YouTube
 - Edit a bookmarked video according to your needs
 - Import and export your bookmarks as JSON
@@ -34,12 +35,20 @@ Your bookmarks live in Chrome extension storage on your device. The extension pr
 
 Deleting all bookmarks clears both local storage and the sync backup, so export first if you want a copy.
 
+## Managing tags
+
+**Manage tags** next to the Tags chips lists every tag with how many bookmarks use it:
+
+- **Rename** updates the tag on all bookmarks that use it. Renaming onto an existing tag merges the two, keeping the existing spelling.
+- **Delete** removes the tag from every bookmark. A bookmark left with no tags gets `generic topic`, which is the fallback tag and cannot be renamed or deleted.
+- Both operations update the bookmarks' timestamps, so the change is merged and pushed like any other edit.
+
 ## Merging bookmarks across machines
 
 Connect a gist on every machine (Sync settings → token with the `gist` scope). After that the manager merges instead of overwriting:
 
 - **Sync now** pulls the gist, merges it with this device, then pushes the result back. With *Sync automatically* on, this also happens when the manager opens and shortly after an edit or delete.
-- The merge is three-way: the extension remembers the last synced copy of every bookmark, so it can tell which side changed a title, category, note or tags.
+- The merge is three-way: the extension remembers the last synced copy of every bookmark, so it can tell which side changed a title, category or note. Tags merge as a set: additions from either side are kept and removals propagate.
 - **Conflicts** (both machines changed the same field) open a dialog with the local value, the other machine's value and the last synced value. Pick a value per field, use *Use mine/theirs everywhere*, then **Apply and sync**. Cancelling changes nothing.
 - **Deletes propagate.** Deleting a bookmark records a tombstone that is pushed with the next sync, so the other machine does not bring it back. Delete-vs-edit becomes a conflict you decide.
 - **Merge log.** Every sync that changes something writes `yt-bookmarks-merge-YYYY-MM-DD-HHmm.md` (Downloads, unless you turn off *Save a merge log file after each sync*). The same report is available from **Merge log** on the dashboard. It lists what was added, removed, updated, and how each conflict was resolved, so you can repair anything by hand.

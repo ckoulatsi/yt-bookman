@@ -69,7 +69,10 @@
       <div id="categoryChips" class="chip-list"></div>
     </div>
     <div>
-      <h2>Tags</h2>
+      <div class="facet-head">
+        <h2>Tags</h2>
+        <button id="manageTagsButton" type="button" class="secondary-button">Manage tags</button>
+      </div>
       <div id="tagChips" class="chip-list"></div>
     </div>
   </section>
@@ -211,6 +214,32 @@
     <div class="modal-actions">
       <button id="cancelConflict" type="button" class="secondary-button">Cancel sync</button>
       <button id="applyConflict" type="button" class="primary-button">Apply and sync</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="tagModal" class="modal tag-modal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">Tags</p>
+        <h2>Manage tags</h2>
+      </div>
+      <button id="closeTagModal" type="button" class="icon-button" aria-label="Close tag manager">x</button>
+    </div>
+
+    <p class="field-help">
+      Renaming a tag updates every bookmark that uses it. Deleting a tag removes it
+      everywhere; a bookmark left without tags gets <strong>generic topic</strong>.
+    </p>
+
+    <p id="tagMessage" class="status-message" aria-live="polite"></p>
+
+    <div id="tagList" class="tag-manager"></div>
+
+    <div class="modal-actions">
+      <span></span>
+      <button id="closeTagModalFooter" type="button" class="secondary-button">Close</button>
     </div>
   </div>
 </dialog>

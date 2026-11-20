@@ -111,7 +111,7 @@ test('without a base, two different non-empty values conflict', () => {
   assert.equal(plan({ local: [local], remote: [remote] }).conflicts.length, 1);
 });
 
-test('merges tags as a union and drops tags removed on both sides', () => {
+test('propagates tag removals and keeps tags added on either side', () => {
   const base = bookmark({ tags: ['kept', 'gone', 'revived'] });
   const local = bookmark({ tags: ['kept', 'revived'] });
   const remote = bookmark({ tags: ['kept', 'extra'] });
@@ -123,7 +123,7 @@ test('merges tags as a union and drops tags removed on both sides', () => {
   });
 
   assert.equal(result.conflicts.length, 0);
-  assert.deepEqual(merge.applyResolutions(result).bookmarks[0].tags, ['extra', 'kept', 'revived']);
+  assert.deepEqual(merge.applyResolutions(result).bookmarks[0].tags, ['extra', 'kept']);
 });
 
 test('propagates a delete when the other side did not edit the bookmark', () => {

@@ -163,13 +163,28 @@
   function mergeTags(localTags, remoteTags, baseTags) {
     const local = new Set(tagList(localTags));
     const remote = new Set(tagList(remoteTags));
-    const base = new Set(tagList(baseTags || []));
-    const merged = new Set([...local, ...remote]);
+    const merged = new Set();
 
-    // A tag removed on both sides stays removed; a tag removed on one side
-    // survives, which is the lossless choice and avoids tag-level conflicts.
+    // No base snapshot: keep everything, because a missing tag cannot be told
+    // apart from a tag that only one side ever had.
+    if (baseTags === null || baseTags === undefined) {
+      [...local, ...remote].forEach((tag) => merged.add(tag));
+      return [...merged].sort((a, b) => a.localeCompare(b));
+    }
+
+    const base = new Set(tagList(baseTags));
+
+    // Three-way set merge: a tag survives when it is still on both sides, or
+    // when one side added it after the last sync. A removal therefore
+    // propagates, which is what tag renames and deletes rely on.
     base.forEach((tag) => {
-      if (!local.has(tag) && !remote.has(tag)) merged.delete(tag);
+      if (local.has(tag) && remote.has(tag)) merged.add(tag);
+    });
+    local.forEach((tag) => {
+      if (!base.has(tag)) merged.add(tag);
+    });
+    remote.forEach((tag) => {
+      if (!base.has(tag)) merged.add(tag);
     });
 
     return [...merged].sort((a, b) => a.localeCompare(b));
@@ -574,6 +589,92 @@
     return changes;
   }
 
+  /**
+   * Rename a tag on every bookmark that uses it. Renaming onto a tag that
+   * already exists merges the two, keeping the existing spelling.
+   */
+  function applyTagRename(bookmarks, oldName, newName, stamp) {
+    const source = String(oldName || '').trim();
+    const target = String(newName || '').trim();
+    const list = Array.isArray(bookmarks) ? bookmarks : [];
+    const now = stamp || nowIso();
+
+    if (!source || !target) {
+      return { bookmarks: list, changed: 0, target: '', mergedInto: false };
+    }
+
+    const existing = new Map();
+    list.forEach((bookmark) => {
+      (bookmark.tags || []).forEach((tag) => {
+        const key = String(tag).toLowerCase();
+        if (!existing.has(key)) existing.set(key, tag);
+      });
+    });
+
+    const mergedInto = target.toLowerCase() !== source.toLowerCase() && existing.has(target.toLowerCase());
+    const finalName = mergedInto ? existing.get(target.toLowerCase()) : target;
+
+    if (finalName === source) {
+      return { bookmarks: list, changed: 0, target: finalName, mergedInto: false };
+    }
+
+    let changed = 0;
+    const next = list.map((bookmark) => {
+      const tags = Array.isArray(bookmark.tags) ? bookmark.tags : [];
+      if (!tags.includes(source)) return bookmark;
+
+      const seen = new Set();
+      const renamed = [];
+
+      tags.forEach((tag) => {
+        const value = tag === source ? finalName : tag;
+        const key = value.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        renamed.push(value);
+      });
+
+      changed += 1;
+      return { ...bookmark, tags: renamed, updatedAt: now };
+    });
+
+    return { bookmarks: next, changed, target: finalName, mergedInto };
+  }
+
+  /**
+   * Remove a tag from every bookmark. A bookmark left without tags gets the
+   * fallback tag, so nothing ends up untagged.
+   */
+  function applyTagRemoval(bookmarks, name, fallbackTag, stamp) {
+    const target = String(name || '').trim();
+    const fallback = String(fallbackTag || '').trim() || 'generic topic';
+    const list = Array.isArray(bookmarks) ? bookmarks : [];
+    const now = stamp || nowIso();
+
+    if (!target) {
+      return { bookmarks: list, changed: 0, fallbackApplied: 0 };
+    }
+
+    let changed = 0;
+    let fallbackApplied = 0;
+
+    const next = list.map((bookmark) => {
+      const tags = Array.isArray(bookmark.tags) ? bookmark.tags : [];
+      if (!tags.includes(target)) return bookmark;
+
+      let remaining = tags.filter((tag) => tag !== target);
+      if (!remaining.length) {
+        remaining = [fallback];
+        fallbackApplied += 1;
+      }
+
+      changed += 1;
+      return { ...bookmark, tags: remaining, updatedAt: now };
+    });
+
+    return { bookmarks: next, changed, fallbackApplied };
+  }
+
   function buildLog(options) {
     const beforeMap = mapByIdentity(options.beforeBookmarks);
     const afterMap = mapByIdentity(options.afterBookmarks);
@@ -834,6 +935,8 @@
     toMarkdown,
     fingerprint,
     diffBookmarks,
+    applyTagRename,
+    applyTagRemoval,
     activityTime,
     toTime
   };

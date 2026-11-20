@@ -16,6 +16,7 @@ const AUTO_LOG_KEY = 'yt_auto_log';
 const SYNC_PAYLOAD_VERSION = 2;
 const UNCATEGORIZED = 'Uncategorized';
 const NEW_CATEGORY = '__ytbm_new_category__';
+const GENERIC_TAG = 'generic topic';
 
 const state = {
   bookmarks: [],
@@ -83,6 +84,12 @@ const els = {
   clearFilters: document.getElementById('clearFilters'),
   categoryChips: document.getElementById('categoryChips'),
   tagChips: document.getElementById('tagChips'),
+  manageTagsButton: document.getElementById('manageTagsButton'),
+  tagModal: document.getElementById('tagModal'),
+  closeTagModal: document.getElementById('closeTagModal'),
+  closeTagModalFooter: document.getElementById('closeTagModalFooter'),
+  tagMessage: document.getElementById('tagMessage'),
+  tagList: document.getElementById('tagList'),
   emptyState: document.getElementById('emptyState'),
   emptyTitle: document.getElementById('emptyTitle'),
   emptyCopy: document.getElementById('emptyCopy'),
@@ -596,6 +603,210 @@ function renderChips(container, items, activeValue, type) {
     chip.append(label, badge);
     container.appendChild(chip);
   });
+}
+
+function setTagMessage(message, tone = '') {
+  els.tagMessage.textContent = message;
+  els.tagMessage.dataset.tone = tone;
+}
+
+function openTagModal() {
+  resetTagDeleteState();
+  setTagMessage('', '');
+  renderTagManager();
+
+  if (typeof els.tagModal.showModal === 'function') {
+    els.tagModal.showModal();
+  } else {
+    els.tagModal.setAttribute('open', '');
+  }
+}
+
+function closeTagModalDialog() {
+  resetTagDeleteState();
+
+  if (typeof els.tagModal.close === 'function') {
+    els.tagModal.close();
+  } else {
+    els.tagModal.removeAttribute('open');
+  }
+}
+
+function renderTagManager() {
+  const tags = getTagCounts();
+  els.tagList.replaceChildren();
+
+  if (!tags.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No tags yet. Add tags while editing a bookmark.';
+    els.tagList.appendChild(empty);
+    return;
+  }
+
+  tags.forEach(([name, count]) => {
+    els.tagList.appendChild(createTagManagerRow(name, count));
+  });
+}
+
+function createTagManagerRow(name, count) {
+  const isFallback = name === GENERIC_TAG;
+  const row = document.createElement('div');
+  row.className = 'tag-edit-row';
+  row.dataset.tag = name;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'tag-edit-input';
+  input.value = name;
+  input.setAttribute('aria-label', `Rename tag ${name}`);
+
+  if (isFallback) {
+    input.disabled = true;
+    input.title = 'The fallback tag cannot be renamed.';
+  }
+
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    handleTagRename(name, input.value).catch((error) => {
+      console.error('YouTube Bookmark Manager: tag rename failed', error);
+    });
+  });
+
+  const meta = document.createElement('span');
+  meta.className = 'tag-edit-count';
+  meta.textContent = `${count} ${count === 1 ? 'video' : 'videos'}`;
+
+  if (isFallback) {
+    const badge = document.createElement('strong');
+    badge.className = 'tag-fallback-badge';
+    badge.textContent = 'fallback';
+    meta.append(' ', badge);
+  }
+
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'secondary-button tag-edit-save';
+  save.textContent = 'Rename';
+  save.disabled = isFallback;
+  save.addEventListener('click', () => {
+    handleTagRename(name, input.value).catch((error) => {
+      console.error('YouTube Bookmark Manager: tag rename failed', error);
+    });
+  });
+
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'danger-button tag-edit-delete';
+  remove.textContent = 'Delete';
+  remove.disabled = isFallback;
+  if (isFallback) remove.title = 'The fallback tag cannot be deleted.';
+  remove.addEventListener('click', () => {
+    handleTagDeleteClick(name, remove);
+  });
+
+  row.append(input, meta, save, remove);
+  return row;
+}
+
+async function handleTagRename(oldName, newValue) {
+  if (oldName === GENERIC_TAG) {
+    setTagMessage(`"${GENERIC_TAG}" is the fallback tag and cannot be renamed.`, 'error');
+    return;
+  }
+
+  const target = String(newValue || '').trim();
+  if (!target) {
+    setTagMessage('A tag needs a name.', 'error');
+    return;
+  }
+
+  if (target === oldName) {
+    setTagMessage('', '');
+    return;
+  }
+
+  const result = YTBMerge.applyTagRename(state.bookmarks, oldName, target);
+  if (!result.changed) {
+    setTagMessage(`"${oldName}" is no longer used.`, '');
+    renderTagManager();
+    return;
+  }
+
+  if (state.tag === oldName) state.tag = result.target;
+
+  await saveBookmarks(result.bookmarks);
+  renderTagManager();
+
+  const count = `${result.changed} bookmark${result.changed === 1 ? '' : 's'}`;
+  setTagMessage(result.mergedInto
+    ? `Merged "${oldName}" into "${result.target}" on ${count}.`
+    : `Renamed "${oldName}" to "${result.target}" on ${count}.`, 'success');
+}
+
+let tagDeleteState = { name: '', button: null, timeoutId: null };
+
+function resetTagDeleteState() {
+  if (tagDeleteState.timeoutId) window.clearTimeout(tagDeleteState.timeoutId);
+  if (tagDeleteState.button) {
+    tagDeleteState.button.dataset.armed = 'false';
+    tagDeleteState.button.textContent = 'Delete';
+  }
+
+  tagDeleteState = { name: '', button: null, timeoutId: null };
+}
+
+function handleTagDeleteClick(name, button) {
+  if (name === GENERIC_TAG) {
+    setTagMessage(`"${GENERIC_TAG}" is the fallback tag and cannot be deleted.`, 'error');
+    return;
+  }
+
+  if (tagDeleteState.name !== name) {
+    resetTagDeleteState();
+    button.dataset.armed = 'true';
+    button.textContent = 'Confirm delete';
+    tagDeleteState = {
+      name,
+      button,
+      timeoutId: window.setTimeout(resetTagDeleteState, 4000)
+    };
+    setTagMessage(`Delete "${name}" from every bookmark? Click again to confirm.`, 'error');
+    return;
+  }
+
+  resetTagDeleteState();
+  performTagDelete(name).catch((error) => {
+    console.error('YouTube Bookmark Manager: tag delete failed', error);
+  });
+}
+
+async function performTagDelete(name) {
+  if (name === GENERIC_TAG) {
+    setTagMessage(`"${GENERIC_TAG}" is the fallback tag and cannot be deleted.`, 'error');
+    return;
+  }
+
+  const result = YTBMerge.applyTagRemoval(state.bookmarks, name, GENERIC_TAG);
+  if (!result.changed) {
+    setTagMessage(`"${name}" is no longer used.`, '');
+    renderTagManager();
+    return;
+  }
+
+  if (state.tag === name) state.tag = 'all';
+
+  await saveBookmarks(result.bookmarks);
+  renderTagManager();
+
+  const count = `${result.changed} bookmark${result.changed === 1 ? '' : 's'}`;
+  const fallback = result.fallbackApplied
+    ? result.fallbackApplied === 1
+      ? ` 1 bookmark had only that tag and now uses "${GENERIC_TAG}".`
+      : ` ${result.fallbackApplied} bookmarks had only that tag and now use "${GENERIC_TAG}".`
+    : '';
+  setTagMessage(`Removed "${name}" from ${count}.${fallback}`, 'success');
 }
 
 function renderBookmarks(bookmarks) {
@@ -1997,6 +2208,13 @@ function bindEvents() {
 
   els.categoryChips.addEventListener('click', handleChipClick);
   els.tagChips.addEventListener('click', handleChipClick);
+  els.manageTagsButton.addEventListener('click', openTagModal);
+  els.closeTagModal.addEventListener('click', closeTagModalDialog);
+  els.closeTagModalFooter.addEventListener('click', closeTagModalDialog);
+  els.tagModal.addEventListener('click', (event) => {
+    if (event.target === els.tagModal) closeTagModalDialog();
+  });
+  els.tagModal.addEventListener('close', resetTagDeleteState);
   els.categorySelect.addEventListener('change', () => {
     syncEditNewCategoryField();
     if (els.categorySelect.value === NEW_CATEGORY) {
