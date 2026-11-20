@@ -15,6 +15,7 @@ A simple bookmark manager extension for the Chrome Browser, for saving, organizi
 - Import and export your bookmarks as JSON
 - Automatic backup to Chrome sync storage with auto-restore after reinstall
 - Sync bookmarks across devices through a private GitHub gist
+- Three-way merge with per-field conflict resolution and a downloadable merge log
 - Clean and simple interface
 
 ## Use Case
@@ -32,6 +33,18 @@ Your bookmarks live in Chrome extension storage on your device. The extension pr
 - **GitHub gist sync.** Optionally connect a GitHub personal access token and push/pull your bookmarks through a secret gist to move them between computers.
 
 Deleting all bookmarks clears both local storage and the sync backup, so export first if you want a copy.
+
+## Merging bookmarks across machines
+
+Connect a gist on every machine (Sync settings → token with the `gist` scope). After that the manager merges instead of overwriting:
+
+- **Sync now** pulls the gist, merges it with this device, then pushes the result back. With *Sync automatically* on, this also happens when the manager opens and shortly after an edit or delete.
+- The merge is three-way: the extension remembers the last synced copy of every bookmark, so it can tell which side changed a title, category, note or tags.
+- **Conflicts** (both machines changed the same field) open a dialog with the local value, the other machine's value and the last synced value. Pick a value per field, use *Use mine/theirs everywhere*, then **Apply and sync**. Cancelling changes nothing.
+- **Deletes propagate.** Deleting a bookmark records a tombstone that is pushed with the next sync, so the other machine does not bring it back. Delete-vs-edit becomes a conflict you decide.
+- **Merge log.** Every sync that changes something writes `yt-bookmarks-merge-YYYY-MM-DD-HHmm.md` (Downloads, unless you turn off *Save a merge log file after each sync*). The same report is available from **Merge log** on the dashboard. It lists what was added, removed, updated, and how each conflict was resolved, so you can repair anything by hand.
+
+The gist is a single file, so two machines syncing at the exact same moment can race. The extension re-reads the gist before writing and retries once; if the file keeps changing it asks you to sync again rather than overwriting blindly.
 
 ## Installation
 

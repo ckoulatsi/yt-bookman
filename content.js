@@ -219,7 +219,8 @@ function createBookmark() {
     hasTimestamp: false,
     timestampSeconds,
     notes: '',
-    addedAt: new Date().toISOString()
+    addedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
   };
 }
 

@@ -17,13 +17,32 @@
       <p id="importExportMessage" class="status-message" aria-live="polite"></p>
       <button id="importButton" type="button" class="secondary-button">Import</button>
       <button id="exportButton" type="button" class="secondary-button">Export</button>
-      <button id="syncButton" type="button" class="secondary-button">Sync</button>
+      <button id="syncButton" type="button" class="primary-button">Sync now</button>
       <button id="deleteAllButton" type="button" class="danger-button">Delete all</button>
       <div class="bookmark-count" id="bookmarkCount">0 bookmarks</div>
     </div>
   </header>
 
   <input id="importFileInput" type="file" accept="application/json,.json" hidden>
+
+  <section id="syncPanel" class="sync-panel" aria-label="Sync and merge status">
+    <div class="sync-panel-status">
+      <span id="syncDot" class="sync-dot" data-state="off" aria-hidden="true"></span>
+      <div>
+        <h2>Merge across machines</h2>
+        <p id="syncPanelStatus" class="sync-panel-line" aria-live="polite">Not connected. Add a private GitHub gist to merge bookmarks between machines.</p>
+        <p id="syncPanelDetail" class="sync-panel-detail"></p>
+      </div>
+    </div>
+    <div class="sync-panel-actions">
+      <label class="sync-toggle">
+        <input id="autoSyncToggle" type="checkbox" checked>
+        <span>Sync automatically</span>
+      </label>
+      <button id="mergeLogButton" type="button" class="secondary-button" disabled>Merge log</button>
+      <button id="syncSettingsButton" type="button" class="secondary-button">Sync settings</button>
+    </div>
+  </section>
 
   <section class="toolbar" aria-label="Bookmark filters">
     <label class="search-field">
@@ -125,7 +144,8 @@
     <p class="field-help">
       Bookmarks are stored in a secret GitHub gist on your account. Connect each
       device with a <a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=YouTube%20Bookmark%20Manager" target="_blank" rel="noreferrer">personal access token</a>
-      that has the <strong>gist</strong> scope, then push or pull to merge.
+      that has the <strong>gist</strong> scope. Every sync pulls the gist, merges it
+      with this device, then pushes the result back.
     </p>
 
     <div id="syncConnectSection">
@@ -143,11 +163,21 @@
 
     <div id="syncConnectedSection" hidden>
       <p id="syncStatus" class="status-message"></p>
+
+      <label>
+        <span>This device name</span>
+        <input id="deviceNameInput" type="text" placeholder="Home" autocomplete="off">
+      </label>
+
+      <label class="checkbox-row">
+        <input id="autoLogToggle" type="checkbox">
+        <span>Save a merge log file after each sync</span>
+      </label>
+
       <div class="modal-actions">
         <button id="syncDisconnectButton" type="button" class="danger-button">Disconnect</button>
         <div>
-          <button id="syncPullButton" type="button" class="secondary-button">Pull from gist</button>
-          <button id="syncPushButton" type="button" class="primary-button">Push to gist</button>
+          <button id="syncSettingsNowButton" type="button" class="primary-button">Sync now</button>
         </div>
       </div>
     </div>
@@ -156,6 +186,36 @@
   </div>
 </dialog>
 
+<dialog id="conflictModal" class="modal conflict-modal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">Merge conflict</p>
+        <h2 id="conflictTitle">Resolve changed bookmarks</h2>
+      </div>
+      <button id="closeConflictModal" type="button" class="icon-button" aria-label="Close conflict dialog">x</button>
+    </div>
+
+    <p id="conflictMessage" class="status-message" aria-live="polite"></p>
+
+    <div class="conflict-toolbar">
+      <span class="field-help">These bookmarks changed on both machines since the last sync.</span>
+      <div>
+        <button id="conflictUseMine" type="button" class="secondary-button">Use mine everywhere</button>
+        <button id="conflictUseTheirs" type="button" class="secondary-button">Use theirs everywhere</button>
+      </div>
+    </div>
+
+    <div id="conflictList" class="conflict-list"></div>
+
+    <div class="modal-actions">
+      <button id="cancelConflict" type="button" class="secondary-button">Cancel sync</button>
+      <button id="applyConflict" type="button" class="primary-button">Apply and sync</button>
+    </div>
+  </div>
+</dialog>
+
+<script src="sync.js"></script>
 <script src="manager.js"></script>
 </body>
 </html>
